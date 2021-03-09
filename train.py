@@ -46,8 +46,7 @@ def train():
 
             text = text.to(config.dev)
             ans = ans.to(config.dev)
-            out = model(text)
-            out = out[0,pos,:]
+            out = model(text, pos)
 
             loss = loss - torch.sum(
                 torch.log(out) * ans
