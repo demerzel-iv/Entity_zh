@@ -41,8 +41,18 @@ def train():
 
         loss = torch.tensor(0)
 
-        for i in range(40):
-            text, pos, ans = get_input(data[randint(0,len(data)-1)])
+        is_person = False
+        is_object = False
+
+        for i in range(30):
+            samp = data[randint(0,len(data)-1)]
+            while (is_person and 'person' in samp['y_str']) or (is_object and 'object' in samp['y_str']):
+                samp = data[randint(0,len(data)-1)]
+
+            is_person |= 'person' in samp['y_str']
+            is_objectj |= 'object' in samp['y_str']
+
+            text, pos, ans = get_input(samp)
 
             text = text.to(config.dev)
             ans = ans.to(config.dev)
@@ -57,7 +67,7 @@ def train():
         avg_loss += loss.item()
 
         if epoch_cnt % 200 == 0:
-            print('avg_loss = ', avg_loss/200/17)
+            print('avg_loss = ', avg_loss/200/30)
             avg_loss = 0
 
         loss.backward()
