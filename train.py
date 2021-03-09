@@ -4,7 +4,9 @@ import json
 from tqdm import tqdm
 from random import randint
 from transformers import BertTokenizer, BertModel
-from model import noname
+
+from source.model import noname
+from source.parser import parse
 
 def loads_from_file(path):
     f = open(path, 'r')
@@ -42,8 +44,8 @@ def train():
         for i in range(40):
             text, pos, ans = get_input(data[randint(0,len(data)-1)])
 
-            text = text.to('cuda:7')
-            ans = ans.to('cuda:7')
+            text = text.to(config.dev)
+            ans = ans.to(config.dev)
             out = model(text)
             out = out[0,pos,:]
 
@@ -71,8 +73,8 @@ def test():
 
     for i in range(len(test_data)):
         text, pos, ans = get_input(test_data[i])
-        text = text.to('cuda:7')
-        ans = ans.to('cuda:7')
+        text = text.to(config.dev)
+        ans = ans.to(config.dev)
         out = model(text)
         out = out[0,pos,:]
 
@@ -89,14 +91,17 @@ def test():
     print("avg_loss on test : " , avg_loss/len(test_data))
 
 def main():
-    global tokenizer, types, data, model
+    global tokenizer, types, data, model, config
 
-    path = '/home/demerzel/Desktop/workshop/NLP/bert'
+    config = parse()
+
+    #path = '/home/demerzel/Desktop/workshop/NLP/bert'
+    path = '.'
 
     tokenizer = BertTokenizer.from_pretrained(path + '/vocab.txt', additional_special_tokens = ['[ENL]','[ENR]']) 
     types = loads_from_file(path + '/types.json')
     data = loads_from_file(path + '/train_data.json')
-    model = noname().to('cuda:7')
+    model = noname().to(config.dev)
 
     train()
 
