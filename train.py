@@ -50,7 +50,7 @@ def train():
                 samp = data[randint(0,len(data)-1)]
 
             is_person |= 'person' in samp['y_str']
-            is_objectj |= 'object' in samp['y_str']
+            is_object |= 'object' in samp['y_str']
 
             text, pos, ans = get_input(samp)
 
