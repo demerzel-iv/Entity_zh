@@ -16,6 +16,7 @@ def loads_from_file(path):
 
 def get_input(obj):
     text = obj['left_context_token'] + ' [ENL] ' + obj['mention_span'] + ' [ENR] ' + obj['right_context_token']
+
     text = tokenizer.tokenize(text)
     pos = text.index('[ENL]')
     text = tokenizer.convert_tokens_to_ids(text)
@@ -23,7 +24,8 @@ def get_input(obj):
 
     ans = [0.] * 130
     for ty in obj['y_str'] : 
-        ans[types.index(ty)] = 1.
+        if ty in types:
+            ans[types.index(ty)] = 1.
     ans = torch.tensor(ans)
 
     return text, pos, ans
@@ -36,7 +38,7 @@ def train():
     epoch_cnt = 0
     avg_loss = 0
 
-    for epoch in tqdm(range(1000)):
+    for epoch in tqdm(range(20000)):
         optim.zero_grad()
 
         loss = torch.tensor(0)
@@ -44,7 +46,7 @@ def train():
         is_person = False
         is_object = False
 
-        for i in range(30):
+        for i in range(20):
             samp = data[randint(0,len(data)-1)]
             while (is_person and 'person' in samp['y_str']) or (is_object and 'object' in samp['y_str']):
                 samp = data[randint(0,len(data)-1)]
@@ -67,7 +69,7 @@ def train():
         avg_loss += loss.item()
 
         if epoch_cnt % 200 == 0:
-            print('avg_loss = ', avg_loss/200/30)
+            print('avg_loss = ', avg_loss/200/20)
             avg_loss = 0
 
         loss.backward()
@@ -108,14 +110,15 @@ def main():
 
     tokenizer = BertTokenizer.from_pretrained(path + '/vocab.txt', additional_special_tokens = ['[ENL]','[ENR]']) 
     types = loads_from_file(path + '/types.json')
-    data = loads_from_file(path + '/train_data.json')
+    data = loads_from_file(path + '/train_data_en.json')
     model = noname().to(config.dev)
+#model = torch.load('./model/save0.pth').to(config.dev)
 
-    train()
+#train()
 
     test()
 
-    torch.save(model,path + '/save.pth')
+    torch.save(model,path + '/model/save.pth')
 
 
 if __name__ == '__main__':
