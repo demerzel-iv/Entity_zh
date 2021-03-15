@@ -7,6 +7,7 @@ from transformers import BertTokenizer, BertModel
 
 from source.model import noname
 from source.parser import parse
+from source.count import counter
 
 def loads_from_file(path):
     f = open(path, 'r')
@@ -31,28 +32,22 @@ def get_input(obj):
     return text, pos, ans
 
 def train():
-    model.train()
 
     optim = torch.optim.Adam(params=model.parameters(), lr = 0.001)
+    model.train()
 
     epoch_cnt = 0
     avg_loss = 0
+    item_cnt = 0
+    cnter = counter(130)
 
-    for epoch in tqdm(range(20000)):
+    for epoch in tqdm(range(2000)):
         optim.zero_grad()
 
         loss = torch.tensor(0)
 
-        is_person = False
-        is_object = False
-
         for i in range(20):
             samp = data[randint(0,len(data)-1)]
-            while (is_person and 'person' in samp['y_str']) or (is_object and 'object' in samp['y_str']):
-                samp = data[randint(0,len(data)-1)]
-
-            is_person |= 'person' in samp['y_str']
-            is_object |= 'object' in samp['y_str']
 
             text, pos, ans = get_input(samp)
 
@@ -65,20 +60,35 @@ def train():
                 + torch.log(1-out) * (1-ans)
             )
 
+            item_cnt +=1
+            cnter.count(out.tolist(),ans.tolist())
+
+
         epoch_cnt += 1
         avg_loss += loss.item()
-
-        if epoch_cnt % 200 == 0:
-            print('avg_loss = ', avg_loss/200/20)
-            avg_loss = 0
 
         loss.backward()
         optim.step()
 
+        if epoch_cnt % 200 == 0:
+            print('avg_loss = ', avg_loss/item_cnt)
+            avg_loss = 0
+            item_cnt = 0
+
+            cnter.output()
+            cnter.clear()
+
+            #test()
+            #model.train()
+
+
 def test():
-    test_data = loads_from_file('./test_data.json')
+    test_data = loads_from_file(datapath + 'test_data.json')
+
+    print('testing : ')
 
     avg_loss = 0
+    cnter = counter(130)
 
     model.eval()
 
@@ -94,27 +104,35 @@ def test():
             )
 
         avg_loss += loss.item()
+        cnter.count(out.tolist(),ans.tolist())
 
-    #print(out)
-    #print(ans)
 
     print("avg_loss on test : " , avg_loss/len(test_data))
+    cnter.output()
 
 def main():
-    global tokenizer, types, data, model, config
+    global tokenizer, types, data, model, config, datapath
 
     config = parse()
 
-    #path = '/home/demerzel/Desktop/workshop/NLP/bert'
     path = '.'
+    datapath = '/data3/private/luoyuqi/'
+
+    print('prework on data')
+    data = []
+    for line in tqdm(
+        open(datapath + 'train_data_en.json','r').readlines() 
+        + open(datapath + 'trans_data_zh.json','r').readlines()
+        + open(datapath + 'train_data_zh.json','r').readlines()
+        ):
+        data.append(json.loads(line))
 
     tokenizer = BertTokenizer.from_pretrained(path + '/vocab.txt', additional_special_tokens = ['[ENL]','[ENR]']) 
     types = loads_from_file(path + '/types.json')
-    data = loads_from_file(path + '/train_data_en.json')
     model = noname().to(config.dev)
 #model = torch.load('./model/save0.pth').to(config.dev)
 
-#train()
+    train()
 
     test()
 
