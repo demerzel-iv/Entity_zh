@@ -2,84 +2,56 @@ import torch
 import json
 
 from tqdm import tqdm
-from random import randint
+from random import shuffle
 from transformers import BertTokenizer, BertModel
 
 from source.model import noname
 from source.parser import parse
 from source.count import counter
+from source.function import get_input, loads_from_file
 
-def loads_from_file(path):
-    f = open(path, 'r')
-    ret = json.loads(f.read())
-    f.close()
-    return ret
-
-def get_input(obj):
-    text = obj['left_context_token'] + ' [ENL] ' + obj['mention_span'] + ' [ENR] ' + obj['right_context_token']
-
-    text = tokenizer.tokenize(text)
-    pos = text.index('[ENL]')
-    text = tokenizer.convert_tokens_to_ids(text)
-    text = torch.tensor([text])
-
-    ans = [0.] * 130
-    for ty in obj['y_str'] : 
-        if ty in types:
-            ans[types.index(ty)] = 1.
-    ans = torch.tensor(ans)
-
-    return text, pos, ans
-
-def train():
-
-    optim = torch.optim.Adam(params=model.parameters(), lr = 0.001)
+def train(epoch_num : int):
     model.train()
+    cnter = counter()
 
-    epoch_cnt = 0
-    avg_loss = 0
-    item_cnt = 0
-    cnter = counter(130)
+    for i in range(epoch_num):
+        print("\n===============Epoch.{}===============\n".format(i))
 
-    for epoch in tqdm(range(2000)):
-        optim.zero_grad()
+        optim = torch.optim.Adam(params=model.parameters(), lr = 0.001)
+        avg_loss = 0
+        batch_size = 40
+        batch_num = int(len(data)/batch_size)
+        shuffle(data)
 
-        loss = torch.tensor(0)
+        for batch_cnt in tqdm(range(batch_num)):
 
-        for i in range(20):
-            samp = data[randint(0,len(data)-1)]
+            optim.zero_grad()
 
-            text, pos, ans = get_input(samp)
+            model_input, mask_tensor, pos, ans = get_input(data[batch_cnt * batch_size : (batch_cnt+1) * batch_size], tokenizer, types)
 
-            text = text.to(config.dev)
+            model_input = model_input.to(config.dev)
+            mask_tensor = mask_tensor.to(config.dev)
             ans = ans.to(config.dev)
-            out = model(text, pos)
 
-            loss = loss - torch.sum(
-                torch.log(out) * ans
-                + torch.log(1-out) * (1-ans)
+            model_output = model(model_input, pos, mask_tensor)
+
+            loss = - torch.sum(
+                torch.log(model_output) * ans
+                + torch.log(1-model_output) * (1-ans)
             )
+            
+            cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
 
-            item_cnt +=1
-            cnter.count(out.tolist(),ans.tolist())
+            avg_loss += loss.item()
 
+            loss.backward()
+            optim.step()
 
-        epoch_cnt += 1
-        avg_loss += loss.item()
+            #if (batch_cnt+1) % 200 == 0:
+        print('avg_loss = ', avg_loss/batch_num/batch_size)
+        cnter.output()
+        cnter.clear()
 
-        loss.backward()
-        optim.step()
-
-        if epoch_cnt % 200 == 0:
-            print('avg_loss = ', avg_loss/item_cnt)
-            avg_loss = 0
-            item_cnt = 0
-
-            cnter.output()
-            cnter.clear()
-
-            #test()
-            #model.train()
 
 
 def test():
@@ -87,27 +59,23 @@ def test():
 
     print('testing : ')
 
-    avg_loss = 0
-    cnter = counter(130)
-
     model.eval()
+    cnter = counter()
 
-    for i in range(len(test_data)):
-        text, pos, ans = get_input(test_data[i])
-        text = text.to(config.dev)
-        ans = ans.to(config.dev)
-        out = model(text,pos)
+    model_input, mask_tensor, pos, ans = get_input(test_data, tokenizer, types)
+    model_input = model_input.to(config.dev)
+    mask_tensor = mask_tensor.to(config.dev)
+    ans = ans.to(config.dev)
 
-        loss = - torch.sum(
-            torch.log(out) * ans
-            + torch.log(1-out) * (1-ans)
-            )
+    model_output = model(model_input, pos, mask_tensor)
+    loss = - torch.sum(
+        torch.log(model_output) * ans
+        + torch.log(1-model_output) * (1-ans)
+    )
+    
+    cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
 
-        avg_loss += loss.item()
-        cnter.count(out.tolist(),ans.tolist())
-
-
-    print("avg_loss on test : " , avg_loss/len(test_data))
+    print("avg_loss on test : " , loss.item()/len(test_data))
     cnter.output()
 
 def main():
@@ -116,7 +84,7 @@ def main():
     config = parse()
 
     path = '.'
-    datapath = '/data3/private/luoyuqi/'
+    datapath = '/home/demerzel/Desktop/workshop/NLP/data/'
 
     print('prework on data')
     data = []
@@ -127,13 +95,15 @@ def main():
         ):
         data.append(json.loads(line))
 
-    tokenizer = BertTokenizer.from_pretrained(path + '/vocab.txt', additional_special_tokens = ['[ENL]','[ENR]']) 
+    #tokenizer = BertTokenizer.from_pretrained(path + '/vocab.txt', additional_special_tokens = ['[ENL]','[ENR]']) 
+    tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+    tokenizer.add_special_tokens({'additional_special_tokens':["<ent>","</ent>"]})
+
     types = loads_from_file(path + '/types.json')
-    model = noname().to(config.dev)
-#model = torch.load('./model/save0.pth').to(config.dev)
+    model = noname(len(tokenizer)).to(config.dev)
+#model = torch.load('./model/save.pth').to(config.dev)
 
-    train()
-
+    train(10)
     test()
 
     torch.save(model,path + '/model/save.pth')
