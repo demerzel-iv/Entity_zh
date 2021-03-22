@@ -17,7 +17,7 @@ class noname(nn.Module):
         for x in self.bert.parameters():
             x.requires_grad = False
         
-    def forward(self, x, pos, mask_tensor):
+    def forward(self, x, pos, mask_tensor = None):
         n = len(pos)
 
         x = self.bert(x, attention_mask = mask_tensor)
