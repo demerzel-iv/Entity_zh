@@ -7,10 +7,16 @@ class counter:
 
     def count(self,out, ans):
         for i in range(len(out)):
-            self.cnt[ans[i] > 0.99][out[i] > 0.2] += 1
+            self.cnt[ans[i] > 0.99][out[i] > 0.4] += 1
     
     def output(self):
-        print('accuracy = ', (self.cnt[0][0] + self.cnt[1][1])*1.0 / (sum(self.cnt[0]) + sum(self.cnt[1])) )
-        print('precision = ', self.cnt[1][1]*1.0 / (self.cnt[0][1] + self.cnt[1][1]) )
-        print('recall = ', self.cnt[1][1]*1.0 / sum(self.cnt[1]) )
-        print('')
+        try:
+            p = self.cnt[1][1]*1.0 / (self.cnt[0][1] + self.cnt[1][1])
+            r = self.cnt[1][1]*1.0 / sum(self.cnt[1])
+# print('accuracy = ', (self.cnt[0][0] + self.cnt[1][1])*1.0 / (sum(self.cnt[0]) + sum(self.cnt[1])) )
+            print('precision = ',  p)
+            print('recall = ',  r)
+            print('f1 = ',  2/(1/r+1/p))
+            print('')
+        except:
+            pass

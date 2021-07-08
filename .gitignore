@@ -1,2 +1,6 @@
 __pycache__
 *.pth
+*.out
+*.sh
+*.swp
+*.swo

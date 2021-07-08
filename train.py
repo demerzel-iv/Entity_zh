@@ -1,113 +1,166 @@
 import torch
 import json
+import time
+import traceback
 
 from tqdm import tqdm
-from random import shuffle
+from random import shuffle, randint
 from transformers import BertTokenizer, BertModel
 
 from source.model import noname
 from source.parser import parse
 from source.count import counter
-from source.function import get_input, loads_from_file
+from source.sampler import sampler
+from source.function import *
 
-def train(epoch_num : int):
+from test import test
+
+def train(model, data, epoch_num : int, lr : float = 1e-5):
     model.train()
-    cnter = counter()
+
+    for i in range(epoch_num, epoch_num+1):
+        print("\n===============Epoch.{}===============\n".format(i))
+
+        optim = torch.optim.Adam(params=model.parameters(), lr = lr)
+        batch_size = 30 * 1
+        my_sampler = sampler(data,types,batch_size)
+
+        cnter = counter()
+        item_cnt = 0
+        avg_loss = 0
+
+        for samp in my_sampler.n_way_k_shot():
+#for samp in my_sampler.get_batches():
+            optim.zero_grad()
+
+            try:
+                model_input, mask_tensor, ans, pos = get_input(samp , tokenizer, types)
+                model_input = model_input.to(config.dev)
+                mask_tensor = mask_tensor.to(config.dev)
+                sim = get_sim(samp).to(config.dev)
+                ans = ans.to(config.dev)
+
+                model_output,embeddings = model(model_input, pos, mask_tensor = mask_tensor)
+                loss = loss_function(model_output, ans)
+                
+                cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
+                avg_loss += loss.item()
+
+
+                loss /= batch_size
+                loss.backward()
+
+                optim.step()
+            
+                item_cnt += 1
+            except Exception as e:
+                traceback.print_exc()
+
+#if (batch_cnt+1) % int(batch_num/3) == 0 :
+#if item_cnt == 10 :
+        print('avg_loss = ', avg_loss/item_cnt/batch_size)
+        item_cnt = 0
+        avg_loss = 0 
+        cnter.output()
+        cnter.clear()
+
+#torch.save(model.module,path + '/model/epoch{}.pth'.format(i))
+
+def contrastive_train_batch(model,data, epoch_num : int , lr : float = 1e-5):
+    model.train()
 
     for i in range(epoch_num):
         print("\n===============Epoch.{}===============\n".format(i))
 
-        optim = torch.optim.Adam(params=model.parameters(), lr = 0.001)
+        optim = torch.optim.Adam(params=model.parameters(), lr = lr)
         avg_loss = 0
-        batch_size = 40
-        batch_num = int(len(data)/batch_size)
-        shuffle(data)
+        cnt = 0
 
-        for batch_cnt in tqdm(range(batch_num)):
+        my_sampler = sampler(data, types, batch_size = 24)
 
-            optim.zero_grad()
+        for samp in my_sampler.get_batches():
+            try:
+                optim.zero_grad()
 
-            model_input, mask_tensor, pos, ans = get_input(data[batch_cnt * batch_size : (batch_cnt+1) * batch_size], tokenizer, types)
+                model_input, mask_tensor, ans, pos = get_input(samp, tokenizer, types, True)
+                model_input = model_input.to(config.dev)
+                mask_tensor = mask_tensor.to(config.dev)
+                sim = get_sim(samp).to(config.dev)
 
-            model_input = model_input.to(config.dev)
-            mask_tensor = mask_tensor.to(config.dev)
-            ans = ans.to(config.dev)
+                model_output, embeddings = model(model_input, pos, mask_tensor = mask_tensor)
+                loss = sim_loss_function(embeddings, sim)
 
-            model_output = model(model_input, pos, mask_tensor)
+#                lmd = 1
+#                for c in model.parameters():
+#                    loss += lmd * (c**2).sum()
+                
+                avg_loss += loss.item()
+                loss.backward()
+                optim.step()
 
-            loss = - torch.sum(
-                torch.log(model_output) * ans
-                + torch.log(1-model_output) * (1-ans)
-            )
-            
-            cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
+                cnt += 1
+            except Exception as e:
+                traceback.print_exc()
 
-            avg_loss += loss.item()
+            if cnt == 100 :
+                print('avg_loss = ', avg_loss/cnt)
+                avg_loss = 0 
+                cnt = 0
 
-            loss.backward()
-            optim.step()
-
-            #if (batch_cnt+1) % 200 == 0:
-        print('avg_loss = ', avg_loss/batch_num/batch_size)
-        cnter.output()
-        cnter.clear()
-
-
-
-def test():
-    test_data = loads_from_file(datapath + 'test_data.json')
-
-    print('testing : ')
-
-    model.eval()
-    cnter = counter()
-
-    model_input, mask_tensor, pos, ans = get_input(test_data, tokenizer, types)
-    model_input = model_input.to(config.dev)
-    mask_tensor = mask_tensor.to(config.dev)
-    ans = ans.to(config.dev)
-
-    model_output = model(model_input, pos, mask_tensor)
-    loss = - torch.sum(
-        torch.log(model_output) * ans
-        + torch.log(1-model_output) * (1-ans)
-    )
-    
-    cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
-
-    print("avg_loss on test : " , loss.item()/len(test_data))
-    cnter.output()
+        print('avg_loss = ', avg_loss/cnt)
+        avg_loss = 0 
+        cnt = 0
 
 def main():
-    global tokenizer, types, data, model, config, datapath
+    global tokenizer, types, config, path
 
     config = parse()
+    path = '/home/luoyuqi/Entity_zh'
+    datapath = '/data/private/luoyuqi/'
 
-    path = '.'
-    datapath = '/home/demerzel/Desktop/workshop/NLP/data/'
-
-    print('prework on data')
-    data = []
-    for line in tqdm(
-        open(datapath + 'train_data_en.json','r').readlines() 
-        + open(datapath + 'trans_data_zh.json','r').readlines()
-        + open(datapath + 'train_data_zh.json','r').readlines()
-        ):
-        data.append(json.loads(line))
-
-    #tokenizer = BertTokenizer.from_pretrained(path + '/vocab.txt', additional_special_tokens = ['[ENL]','[ENR]']) 
     tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-    tokenizer.add_special_tokens({'additional_special_tokens':["<ent>","</ent>"]})
-
+    tokenizer.add_special_tokens({'additional_special_tokens':["<ent>","<blank>"]})
     types = loads_from_file(path + '/types.json')
-    model = noname(len(tokenizer)).to(config.dev)
-#model = torch.load('./model/save.pth').to(config.dev)
 
-    train(10)
-    test()
+#c_data = open(datapath + 'distant.json','r').readlines()
+    c_data = open(datapath + 'data_en.json','r').readlines()
 
-    torch.save(model,path + '/model/save.pth')
+    data = ([] 
+#+ open(datapath + 'data_zh.json','r').readlines()
+#+ open(datapath + 'data_en.json','r').readlines()
++ open(datapath + 'train_data_en.json','r').readlines() 
+#+ open(datapath + 'trans_data_zh.json','r').readlines()
+#+ open(datapath + 'train_data_zh.json','r').readlines()
+    )
 
+#model = noname(len(tokenizer)).to(config.dev)
+    model = torch.load('./model/nnncos.pth').to(config.dev)
+    model = torch.nn.DataParallel(model, device_ids = [0])
+
+#    model.module.activate_bert_fine_tuning(True)
+#    contrastive_train_batch(model, c_data, 1, lr=1e-5)
+#    torch.save(model.module,path + '/model/xcos.pth')
+#    exit()
+
+    model.module.activate_bert_fine_tuning(False)
+    for i in range(1):
+        train(model, data, i, lr = 1e-3)
+    model.module.activate_bert_fine_tuning(True)
+
+    for i in range(30):
+#contrastive_train_batch(model, data, 1)
+        train(model, data, i, lr = 1e-5)
+
+        model.module.activate_bert_fine_tuning(False)
+        test(model.module, datapath, tokenizer, types, config)
+        model.module.activate_bert_fine_tuning(True)
+        print('===========')
+
+    model = model.module
+    torch.save(model,path + '/model/test_c.pth')
+
+    model.activate_bert_fine_tuning(False)
+    test(model, datapath, tokenizer, types, config)
 
 if __name__ == '__main__':
     main()
