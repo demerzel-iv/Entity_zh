@@ -67,18 +67,21 @@ class sampler:
             yield tmp[i]
 
     def n_way_k_shot(self):
+        ''' fake
+        '''
         lst_time = 0
         m = int(self.n / self.batch_size)
         p = [0]*len(self.ind)
         for i in range(m):
-            samp = []
-            for jj in self.get_random_numbers(self.batch_size>>1,len(self.ind)):
-                j = self.keys[jj]
-                if len(self.ind[j]) == 0:
-                    continue
-                for k in range(2):
-                    samp.append(self.data[self.ind[j][p[jj]%len(self.ind[j])]])
-                    p[jj] += 1 
+#            samp = []
+#            for jj in self.get_random_numbers(self.batch_size>>1,len(self.ind)):
+#                j = self.keys[jj]
+#                if len(self.ind[j]) == 0:
+#                    continue
+#                for k in range(2):
+#                    samp.append(self.data[self.ind[j][p[jj]%len(self.ind[j])]])
+#                    p[jj] += 1 
+            samp=self.data[i*self.batch_size:(i+1)*self.batch_size]
             yield samp
 
             if time.time() - lst_time > 3 :

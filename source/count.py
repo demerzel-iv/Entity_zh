@@ -16,7 +16,9 @@ class counter:
 # print('accuracy = ', (self.cnt[0][0] + self.cnt[1][1])*1.0 / (sum(self.cnt[0]) + sum(self.cnt[1])) )
             print('precision = ',  p)
             print('recall = ',  r)
-            print('f1 = ',  2/(1/r+1/p))
+            f1 = 2/(1/r+1/p)
+            print('f1 = ', f1)
             print('')
+            return f1
         except:
             pass

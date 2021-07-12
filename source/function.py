@@ -90,6 +90,10 @@ def sim_loss_function(model_output, sim): #model_output : n*dim, sim : n*n
 #M = model_output
     M = M.matmul(M.t())
     M = M - torch.eye(M.size()[0]).to(M.device.type)*1000
+
+    M=torch.exp(M)
+    return (-torch.log((M*sim).sum(0)+1e-30) + torch.log( (M*(1-sim)).sum(0)+1e-30)).sum()
+
     M = M.softmax(0)
     M = (M*sim).sum(0)
     return - (M * 0.999999 + 0.0000009).log().sum()

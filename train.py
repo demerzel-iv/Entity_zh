@@ -22,7 +22,7 @@ def train(model, data, epoch_num : int, lr : float = 1e-5):
         print("\n===============Epoch.{}===============\n".format(i))
 
         optim = torch.optim.Adam(params=model.parameters(), lr = lr)
-        batch_size = 30 * 1
+        batch_size = 32
         my_sampler = sampler(data,types,batch_size)
 
         cnter = counter()
@@ -44,10 +44,9 @@ def train(model, data, epoch_num : int, lr : float = 1e-5):
                 loss = loss_function(model_output, ans)
                 
                 cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
-                avg_loss += loss.item()
-
 
                 loss /= batch_size
+                avg_loss += loss.item()
                 loss.backward()
 
                 optim.step()
@@ -58,9 +57,7 @@ def train(model, data, epoch_num : int, lr : float = 1e-5):
 
 #if (batch_cnt+1) % int(batch_num/3) == 0 :
 #if item_cnt == 10 :
-        print('avg_loss = ', avg_loss/item_cnt/batch_size)
-        item_cnt = 0
-        avg_loss = 0 
+        print('avg_loss = ', avg_loss/item_cnt)
         cnter.output()
         cnter.clear()
 
@@ -122,42 +119,49 @@ def main():
     tokenizer.add_special_tokens({'additional_special_tokens':["<ent>","<blank>"]})
     types = loads_from_file(path + '/types.json')
 
-#c_data = open(datapath + 'distant.json','r').readlines()
-    c_data = open(datapath + 'data_en.json','r').readlines()
+    c_data = open(datapath + 'distant.json','r').readlines()
+#c_data = open(datapath + 'data_en.json','r').readlines()
 
     data = ([] 
 #+ open(datapath + 'data_zh.json','r').readlines()
 #+ open(datapath + 'data_en.json','r').readlines()
-+ open(datapath + 'train_data_en.json','r').readlines() 
+#+ open(datapath + 'train_data_en.json','r').readlines() 
++ open(datapath + 'simple_exp.json','r').readlines() 
+#+ open(datapath + 'test.json','r').readlines() 
 #+ open(datapath + 'trans_data_zh.json','r').readlines()
 #+ open(datapath + 'train_data_zh.json','r').readlines()
     )
 
 #model = noname(len(tokenizer)).to(config.dev)
-    model = torch.load('./model/nnncos.pth').to(config.dev)
+    model = torch.load('./model/xcos.pth').to(config.dev)
     model = torch.nn.DataParallel(model, device_ids = [0])
 
-#    model.module.activate_bert_fine_tuning(True)
-#    contrastive_train_batch(model, c_data, 1, lr=1e-5)
-#    torch.save(model.module,path + '/model/xcos.pth')
-#    exit()
+    model.module.activate_bert_fine_tuning(True)
+    contrastive_train_batch(model, c_data, 5, lr=1e-6)
+    torch.save(model.module,path + '/model/x5cos.pth')
+    exit()
 
     model.module.activate_bert_fine_tuning(False)
     for i in range(1):
-        train(model, data, i, lr = 1e-3)
+        train(model, data, i, lr = 1e-2 * (0.9**i))
+#        test(model.module, datapath, tokenizer, types, config)
     model.module.activate_bert_fine_tuning(True)
 
-    for i in range(30):
+    maxf1 = 0 
+
+    for i in range(20):
 #contrastive_train_batch(model, data, 1)
         train(model, data, i, lr = 1e-5)
 
         model.module.activate_bert_fine_tuning(False)
-        test(model.module, datapath, tokenizer, types, config)
+        maxf1 = max(maxf1, test(model.module, datapath, tokenizer, types, config))
         model.module.activate_bert_fine_tuning(True)
         print('===========')
 
+    print('maxf1 = ',maxf1)
+
     model = model.module
-    torch.save(model,path + '/model/test_c.pth')
+#torch.save(model,path + '/model/test_cc.pth')
 
     model.activate_bert_fine_tuning(False)
     test(model, datapath, tokenizer, types, config)

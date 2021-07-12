@@ -51,7 +51,7 @@ def test(model, datapath, tokenizer, types, config):
     cnter9 = counter()
     cnter = counter()
 
-    loss = torch.tensor(0)
+    loss = 0.
 
     for x in test_data:
         model_input, mask_tensor, ans, pos = get_input([x], tokenizer, types)
@@ -61,16 +61,16 @@ def test(model, datapath, tokenizer, types, config):
 
         model_output, embeddings = model(model_input, pos, mask_tensor = mask_tensor)
 
-        loss = loss + loss_function(model_output, ans)
+        loss += loss_function(model_output, ans).item()
         
         cnter.count(model_output.view(-1).tolist(),ans.view(-1).tolist())
         cnter9.count(model_output.view(-1).tolist()[:9],ans.view(-1).tolist()[:9]) #for 9-classification
 
-    print("avg_loss on test : " , loss.item()/len(test_data))
+    print("avg_loss on test : " , loss/len(test_data))
     print("on 130 types:")
     cnter.output()
     print("on 9 types:")
-    cnter9.output()
+    return cnter9.output()
 
 def main():
     config = parse()
@@ -83,14 +83,17 @@ def main():
     types = loads_from_file(path + '/types.json')
 
 #model = noname(len(tokenizer)).to(config.dev)
-    model = torch.load('./model/nncos.pth').to('cuda:0')
+    model = torch.load('./model/xcos.pth').to('cuda:0')
 #model = torch.load('./model/cSfixf0.pth').to('cuda:0')
     model.activate_bert_fine_tuning(False)
 
 #test(model, datapath, tokenizer, types, config)
 
-    test_data = open(datapath + 'test.json').readlines()
+    test_data = open(datapath + 'train_data_en.json').readlines()
 #test_data = open(datapath + 'distant.json').readlines()
+    test_contrastive(model, test_data, types, tokenizer)
+
+    test_data = open(datapath + 'test.json').readlines()
     test_contrastive(model, test_data, types, tokenizer)
 
 
